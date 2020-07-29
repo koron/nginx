@@ -16,6 +16,7 @@
 typedef struct {
     ngx_flag_t           enable;
     ngx_bufs_t           bufs;
+    ngx_flag_t           request_body;
 } ngx_http_gunzip_conf_t;
 
 
@@ -78,6 +79,13 @@ static ngx_command_t  ngx_http_gunzip_filter_commands[] = {
       offsetof(ngx_http_gunzip_conf_t, bufs),
       NULL },
 
+    { ngx_string("gunzip_request_body"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG,
+      ngx_conf_set_flag_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_gunzip_conf_t, request_body),
+      NULL },
+
       ngx_null_command
 };
 
@@ -115,6 +123,7 @@ ngx_module_t  ngx_http_gunzip_filter_module = {
 
 static ngx_http_output_header_filter_pt  ngx_http_next_header_filter;
 static ngx_http_output_body_filter_pt    ngx_http_next_body_filter;
+static ngx_http_request_body_filter_pt   ngx_http_next_request_body_filter;
 
 
 static ngx_int_t
@@ -655,6 +664,8 @@ ngx_http_gunzip_create_conf(ngx_conf_t *cf)
 
     conf->enable = NGX_CONF_UNSET;
 
+    conf->request_body = NGX_CONF_UNSET;
+
     return conf;
 }
 
@@ -670,9 +681,52 @@ ngx_http_gunzip_merge_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_bufs_value(conf->bufs, prev->bufs,
                               (128 * 1024) / ngx_pagesize, ngx_pagesize);
 
+    ngx_conf_merge_value(conf->request_body,
+                         prev->request_body, 0);
+
     return NGX_CONF_OK;
 }
 
+static ngx_int_t
+ngx_http_gunzip_request_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
+{
+    ngx_uint_t                    i;
+    ngx_list_part_t              *part;
+    ngx_table_elt_t              *header;
+
+    part = &r->headers_in.headers.part;
+    header = part->elts;
+    for (i = 0; /* void */; i++) {
+
+        if (i >= part->nelts) {
+            if (part->next == NULL) {
+                break;
+            }
+
+            part = part->next;
+            header = part->elts;
+            i = 0;
+        }
+
+        if (header[i].key.len != sizeof("Content-Encoding") - 1
+            || ngx_strncasecmp(header[i]->key.data,
+                               (u_char *) "Content-Encoding",
+                               sizeof("Content-Encoding") - 1)
+            || header[i].value.len != 4
+            || ngx_strncasecmp(header[i]->value.data,
+                               (u_char *) "gzip", 4) != 0)
+        {
+            return ngx_http_next_request_body_filter(r, in);
+        }
+    }
+
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "decompress request body (WIP)");
+
+    /* TODO: implement me. */
+
+    return ngx_http_next_request_body_filter(r, in);
+}
 
 static ngx_int_t
 ngx_http_gunzip_filter_init(ngx_conf_t *cf)
@@ -682,6 +736,9 @@ ngx_http_gunzip_filter_init(ngx_conf_t *cf)
 
     ngx_http_next_body_filter = ngx_http_top_body_filter;
     ngx_http_top_body_filter = ngx_http_gunzip_body_filter;
+
+    ngx_http_next_request_body_filter = ngx_http_top_request_body_filter;
+    ngx_http_top_request_body_filter = ngx_http_gunzip_request_body_filter;
 
     return NGX_OK;
 }
