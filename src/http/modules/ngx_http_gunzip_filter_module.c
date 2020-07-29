@@ -709,11 +709,11 @@ ngx_http_gunzip_request_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
         }
 
         if (header[i].key.len != sizeof("Content-Encoding") - 1
-            || ngx_strncasecmp(header[i]->key.data,
+            || ngx_strncasecmp(header[i].key.data,
                                (u_char *) "Content-Encoding",
                                sizeof("Content-Encoding") - 1)
             || header[i].value.len != 4
-            || ngx_strncasecmp(header[i]->value.data,
+            || ngx_strncasecmp(header[i].value.data,
                                (u_char *) "gzip", 4) != 0)
         {
             return ngx_http_next_request_body_filter(r, in);
