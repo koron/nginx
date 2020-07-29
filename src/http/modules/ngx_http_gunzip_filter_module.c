@@ -693,6 +693,7 @@ ngx_http_gunzip_request_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     ngx_uint_t                    i;
     ngx_list_part_t              *part;
     ngx_table_elt_t              *header;
+    ngx_int_t                     decompress = 0;
 
     part = &r->headers_in.headers.part;
     header = part->elts;
@@ -708,20 +709,27 @@ ngx_http_gunzip_request_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
             i = 0;
         }
 
-        if (header[i].key.len != sizeof("Content-Encoding") - 1
-            || ngx_strncasecmp(header[i].key.data,
+        if (header[i].key.len == sizeof("Content-Encoding") - 1
+            && ngx_strncasecmp(header[i].key.data,
                                (u_char *) "Content-Encoding",
-                               sizeof("Content-Encoding") - 1)
-            || header[i].value.len != 4
-            || ngx_strncasecmp(header[i].value.data,
-                               (u_char *) "gzip", 4) != 0)
+                               sizeof("Content-Encoding") - 1) == 0
+            && header[i].value.len == 4
+            && ngx_strncasecmp(header[i].value.data,
+                               (u_char *) "gzip", 4) == 0)
         {
-            return ngx_http_next_request_body_filter(r, in);
+            decompress = 1;
+            break;
         }
     }
 
+    if (!decompress) {
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                "gunzip_request_body_filter: thru");
+        return ngx_http_next_request_body_filter(r, in);
+    }
+
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                   "decompress request body (WIP)");
+                   "gunzip_request_body_filter: decompress request body (WIP)");
 
     /* TODO: implement me. */
 
