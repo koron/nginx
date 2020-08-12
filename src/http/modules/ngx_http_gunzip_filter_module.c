@@ -213,7 +213,7 @@ ngx_http_gunzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_gunzip_filter_module);
 
-    if (ctx == NULL || ctx->done) {
+    if (ctx == NULL || ctx->done || ctx->recv_done) {
         return ngx_http_next_body_filter(r, in);
     }
 
@@ -740,7 +740,7 @@ ngx_http_gunzip_request_filter_inflate_start(ngx_http_request_t *r,
     int  rc;
 
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                   "[gunrecv] inflate start")
+                   "[gunrecv] inflate start");
 
     ctx->recv_request = r;
 
