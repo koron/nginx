@@ -58,6 +58,8 @@ typedef struct {
     unsigned             recv_done:1;
     unsigned             recv_nomem:1;
 
+    size_t               recv_sum;
+
     z_stream             recv_zstream;
     ngx_http_request_t  *recv_request;
 } ngx_http_gunzip_ctx_t;
@@ -737,6 +739,9 @@ ngx_http_gunzip_request_filter_inflate_start(ngx_http_request_t *r,
 {
     int  rc;
 
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "[gunrecv] inflate start")
+
     ctx->recv_request = r;
 
     ctx->recv_zstream.next_in = Z_NULL;
@@ -759,8 +764,6 @@ ngx_http_gunzip_request_filter_inflate_start(ngx_http_request_t *r,
 
     ctx->recv_last_out = &ctx->recv_out;
     ctx->recv_flush = Z_NO_FLUSH;
-
-    //r->headers_in.content_length_n = -1;
 
     return NGX_OK;
 }
@@ -785,6 +788,11 @@ ngx_http_gunzip_request_filter_inflate_end(ngx_http_request_t *r,
     }
 
     b = ctx->recv_out_buf;
+
+    // update content_length_n
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "[gunrecv] recv_sum=%d", ctx->recv_sum);
+    r->headers_in.content_length_n = ctx->recv_sum;
 
     if (ngx_buf_size(b) == 0) {
 
@@ -899,7 +907,9 @@ ngx_http_gunzip_request_filter_inflate(ngx_http_request_t *r,
     int           rc;
     ngx_buf_t    *b;
     ngx_chain_t  *cl;
+    size_t        curr;
 
+    curr = ctx->recv_zstream.avail_out;
     ngx_log_debug6(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                    "[gunrecv] inflate in: ni:%p no:%p ai:%ud ao:%ud fl:%d redo:%d",
                    ctx->recv_zstream.next_in, ctx->recv_zstream.next_out,
@@ -914,6 +924,9 @@ ngx_http_gunzip_request_filter_inflate(ngx_http_request_t *r,
         return NGX_ERROR;
     }
 
+    if (curr > ctx->recv_zstream.avail_out) {
+        ctx->recv_sum += curr - ctx->recv_zstream.avail_out;
+    }
     ngx_log_debug5(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                    "[gunrecv] inflate out: ni:%p no:%p ai:%ud ao:%ud rc:%d",
                    ctx->recv_zstream.next_in, ctx->recv_zstream.next_out,

@@ -1476,6 +1476,7 @@ ngx_http_proxy_create_request(ngx_http_request_t *r)
                    (size_t) (b->last - b->pos), b->pos);
 
     if (r->request_body_no_buffering) {
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "no buffering");
 
         u->request_bufs = cl;
 
@@ -1485,6 +1486,7 @@ ngx_http_proxy_create_request(ngx_http_request_t *r)
         }
 
     } else if (plcf->body_values == NULL && plcf->upstream.pass_request_body) {
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "with buffering");
 
         body = u->request_bufs;
         u->request_bufs = cl;
