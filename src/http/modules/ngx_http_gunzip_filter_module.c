@@ -12,6 +12,7 @@
 
 #include <zlib.h>
 
+#define ENABLE_ORIG 0
 
 typedef struct {
     ngx_flag_t           enable;
@@ -21,6 +22,7 @@ typedef struct {
 
 
 typedef struct {
+#if ENABLE_ORIG
     ngx_chain_t         *in;
     ngx_chain_t         *free;
     ngx_chain_t         *busy;
@@ -39,6 +41,7 @@ typedef struct {
 
     z_stream             zstream;
     ngx_http_request_t  *request;
+#endif
 
     /* fields for request decompressing */
 
@@ -65,6 +68,7 @@ typedef struct {
 } ngx_http_gunzip_ctx_t;
 
 
+#if ENABLE_ORIG
 static ngx_int_t ngx_http_gunzip_filter_inflate_start(ngx_http_request_t *r,
     ngx_http_gunzip_ctx_t *ctx);
 static ngx_int_t ngx_http_gunzip_filter_add_data(ngx_http_request_t *r,
@@ -75,10 +79,13 @@ static ngx_int_t ngx_http_gunzip_filter_inflate(ngx_http_request_t *r,
     ngx_http_gunzip_ctx_t *ctx);
 static ngx_int_t ngx_http_gunzip_filter_inflate_end(ngx_http_request_t *r,
     ngx_http_gunzip_ctx_t *ctx);
+#endif
 
+#if ENABLE_ORIG
 static void *ngx_http_gunzip_filter_alloc(void *opaque, u_int items,
     u_int size);
 static void ngx_http_gunzip_filter_free(void *opaque, void *address);
+#endif
 
 static ngx_int_t ngx_http_gunzip_filter_init(ngx_conf_t *cf);
 static void *ngx_http_gunzip_create_conf(ngx_conf_t *cf);
@@ -144,11 +151,14 @@ ngx_module_t  ngx_http_gunzip_filter_module = {
 };
 
 
+#if ENABLE_ORIG
 static ngx_http_output_header_filter_pt  ngx_http_next_header_filter;
 static ngx_http_output_body_filter_pt    ngx_http_next_body_filter;
+#endif
 static ngx_http_request_body_filter_pt   ngx_http_next_request_body_filter;
 
 
+#if ENABLE_ORIG
 static ngx_int_t
 ngx_http_gunzip_header_filter(ngx_http_request_t *r)
 {
@@ -201,8 +211,10 @@ ngx_http_gunzip_header_filter(ngx_http_request_t *r)
 
     return ngx_http_next_header_filter(r);
 }
+#endif
 
 
+#if ENABLE_ORIG
 static ngx_int_t
 ngx_http_gunzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 {
@@ -328,8 +340,10 @@ failed:
 
     return NGX_ERROR;
 }
+#endif
 
 
+#if ENABLE_ORIG
 static ngx_int_t
 ngx_http_gunzip_filter_inflate_start(ngx_http_request_t *r,
     ngx_http_gunzip_ctx_t *ctx)
@@ -359,8 +373,10 @@ ngx_http_gunzip_filter_inflate_start(ngx_http_request_t *r,
 
     return NGX_OK;
 }
+#endif
 
 
+#if ENABLE_ORIG
 static ngx_int_t
 ngx_http_gunzip_filter_add_data(ngx_http_request_t *r,
     ngx_http_gunzip_ctx_t *ctx)
@@ -400,7 +416,9 @@ ngx_http_gunzip_filter_add_data(ngx_http_request_t *r,
 
     return NGX_OK;
 }
+#endif
 
+#if ENABLE_ORIG
 static ngx_int_t
 ngx_http_gunzip_filter_get_buf(ngx_http_request_t *r,
     ngx_http_gunzip_ctx_t *ctx)
@@ -440,8 +458,10 @@ ngx_http_gunzip_filter_get_buf(ngx_http_request_t *r,
 
     return NGX_OK;
 }
+#endif
 
 
+#if ENABLE_ORIG
 static ngx_int_t
 ngx_http_gunzip_filter_inflate(ngx_http_request_t *r,
     ngx_http_gunzip_ctx_t *ctx)
@@ -592,8 +612,10 @@ ngx_http_gunzip_filter_inflate(ngx_http_request_t *r,
 
     return NGX_AGAIN;
 }
+#endif
 
 
+#if ENABLE_ORIG
 static ngx_int_t
 ngx_http_gunzip_filter_inflate_end(ngx_http_request_t *r,
     ngx_http_gunzip_ctx_t *ctx)
@@ -641,8 +663,10 @@ ngx_http_gunzip_filter_inflate_end(ngx_http_request_t *r,
 
     return NGX_OK;
 }
+#endif
 
 
+#if ENABLE_ORIG
 static void *
 ngx_http_gunzip_filter_alloc(void *opaque, u_int items, u_int size)
 {
@@ -654,8 +678,10 @@ ngx_http_gunzip_filter_alloc(void *opaque, u_int items, u_int size)
 
     return ngx_palloc(ctx->request->pool, items * size);
 }
+#endif
 
 
+#if ENABLE_ORIG
 static void
 ngx_http_gunzip_filter_free(void *opaque, void *address)
 {
@@ -666,6 +692,7 @@ ngx_http_gunzip_filter_free(void *opaque, void *address)
                    "gunzip free: %p", address);
 #endif
 }
+#endif
 
 
 static void *
@@ -796,7 +823,7 @@ ngx_http_gunzip_request_filter_inflate_end(ngx_http_request_t *r,
 
     if (ngx_buf_size(b) == 0) {
 
-        b = ngx_calloc_buf(ctx->request->pool);
+        b = ngx_calloc_buf(ctx->recv_request->pool);
         if (b == NULL) {
             return NGX_ERROR;
         }
@@ -829,12 +856,16 @@ ngx_http_gunzip_request_filter_add_data(ngx_http_request_t *r,
         return NGX_OK;
     }
 
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                   "gunzip_recv in: %p", ctx->recv_in);
+    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "[gunrecv] in: %p (%d)", ctx->recv_in, ctx->recv_in != NULL ? ngx_buf_size(ctx->recv_in->buf): -1);
 
     if (ctx->recv_in == NULL) {
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "[gunrecv] add_data case#5");
         return NGX_DECLINED;
     }
+
+    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "[gunrecv] in#2: size=%d next=%p", ngx_buf_size(ctx->recv_in->buf), ctx->recv_in->next);
 
     ctx->recv_in_buf = ctx->recv_in->buf;
     ctx->recv_in = ctx->recv_in->next;
@@ -843,18 +874,23 @@ ngx_http_gunzip_request_filter_add_data(ngx_http_request_t *r,
     ctx->recv_zstream.avail_in = ctx->recv_in_buf->last - ctx->recv_in_buf->pos;
 
     ngx_log_debug3(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                   "gunzip_recv in_buf:%p ni:%p ai:%ud",
+                   "[gunrecv] in_buf:%p ni:%p ai:%ud",
                    ctx->recv_in_buf,
                    ctx->recv_zstream.next_in, ctx->recv_zstream.avail_in);
 
     if (ctx->recv_in_buf->last_buf || ctx->recv_in_buf->last_in_chain) {
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "[gunrecv] add_data case#1");
         ctx->recv_flush = Z_FINISH;
 
     } else if (ctx->recv_in_buf->flush) {
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "[gunrecv] add_data case#2");
         ctx->recv_flush = Z_SYNC_FLUSH;
 
     } else if (ctx->recv_zstream.avail_in == 0) {
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "[gunrecv] add_data case#3");
         return NGX_AGAIN;
+    } else {
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "[gunrecv] add_data case#0");
     }
 
     return NGX_OK;
@@ -867,18 +903,21 @@ ngx_http_gunzip_request_filter_get_buf(ngx_http_request_t *r,
     ngx_http_gunzip_conf_t  *conf;
 
     if (ctx->recv_zstream.avail_out) {
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "[gunrecv] get_buf: case#0");
         return NGX_OK;
     }
 
     conf = ngx_http_get_module_loc_conf(r, ngx_http_gunzip_filter_module);
 
     if (ctx->recv_free) {
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "[gunrecv] get_buf: case#1");
         ctx->recv_out_buf = ctx->recv_free->buf;
         ctx->recv_free = ctx->recv_free->next;
 
         ctx->recv_out_buf->flush = 0;
 
     } else if (ctx->recv_bufs < conf->bufs.num) {
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "[gunrecv] get_buf: case#2");
 
         ctx->recv_out_buf = ngx_create_temp_buf(r->pool, conf->bufs.size);
         if (ctx->recv_out_buf == NULL) {
@@ -890,10 +929,12 @@ ngx_http_gunzip_request_filter_get_buf(ngx_http_request_t *r,
         ctx->recv_bufs++;
 
     } else {
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "[gunrecv] get_buf: case#3");
         ctx->recv_nomem = 1;
         return NGX_DECLINED;
     }
 
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "[gunrecv] get_buf: case#4");
     ctx->recv_zstream.next_out = ctx->recv_out_buf->pos;
     ctx->recv_zstream.avail_out = conf->bufs.size;
 
@@ -981,7 +1022,7 @@ ngx_http_gunzip_request_filter_inflate(ngx_http_request_t *r,
 
         if (ngx_buf_size(b) == 0) {
 
-            b = ngx_calloc_buf(ctx->request->pool);
+            b = ngx_calloc_buf(ctx->recv_request->pool);
             if (b == NULL) {
                 return NGX_ERROR;
             }
@@ -1069,6 +1110,19 @@ ngx_http_gunzip_request_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     ngx_chain_t            *cl;
     int                     rc;
 
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                "[gunrecv] filter invoked");
+    for (cl = in; cl; cl = cl->next) {
+        ngx_log_debug7(NGX_LOG_DEBUG_EVENT, r->connection->log, 0,
+                       "[gunrecv] new buf t:%d f:%d %p, pos %p, size: %z "
+                       "file: %O, size: %O",
+                       cl->buf->temporary, cl->buf->in_file,
+                       cl->buf->start, cl->buf->pos,
+                       cl->buf->last - cl->buf->pos,
+                       cl->buf->file_pos,
+                       cl->buf->file_last - cl->buf->file_pos);
+    }
+
     conf = ngx_http_get_module_loc_conf(r, ngx_http_gunzip_filter_module);
     if (!conf->request_body) {
         return ngx_http_next_request_body_filter(r, in);
@@ -1104,7 +1158,9 @@ ngx_http_gunzip_request_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     if (!decompress) {
         ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                 "[gunrecv] thru");
-        return ngx_http_next_request_body_filter(r, in);
+        rc = ngx_http_next_request_body_filter(r, in);
+        ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "[gunrecv] thru next post: rc=%d busy.size=%d", rc, (ctx->recv_busy != NULL ? ngx_buf_size(ctx->recv_busy->buf) : -1));
+        return rc;
     }
 
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
@@ -1121,6 +1177,9 @@ ngx_http_gunzip_request_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
         }
         ngx_http_set_ctx(r, ctx, ngx_http_gunzip_filter_module);
     }
+
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                "[gunrecv] available ctx: busy=%d", ctx->recv_busy != 0);
 
     if (!ctx->recv_started) {
         if (ngx_http_gunzip_request_filter_inflate_start(r, ctx) != NGX_OK) {
@@ -1151,6 +1210,7 @@ ngx_http_gunzip_request_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     for ( ;; ) {
         /* cycle while we can write to a client */
         for ( ;; ) {
+
             /* cycle while there is data to feed zlib and ... */
             rc = ngx_http_gunzip_request_filter_add_data(r, ctx);
             if (rc == NGX_DECLINED) {
@@ -1180,22 +1240,39 @@ ngx_http_gunzip_request_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
         }
 
         if (ctx->recv_out == NULL && !flush) {
+            ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                    "[gunrecv] no out, no flush: busy=%d nomem=%d", ctx->recv_busy != 0, ctx->recv_nomem);
+            return NGX_OK;
             return ctx->recv_busy ? NGX_AGAIN : NGX_OK;
         }
 
+
+        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "[gunrecv] next pre: out.size=%d", (ctx->recv_out != NULL ? ngx_buf_size(ctx->recv_out->buf) : -1));
         rc = ngx_http_next_request_body_filter(r, ctx->recv_out);
         if (rc == NGX_ERROR) {
+            ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                    "[gunrecv] error");
             goto failed;
         }
+        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "[gunrecv] next post: out.size=%d", (ctx->recv_out != NULL ? ngx_buf_size(ctx->recv_out->buf) : -1));
 
+        ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                       "[gunrecv] update_chains#2 pre: busy=%d out.size=%d",
+                       ctx->recv_busy != 0,
+                       (ctx->recv_out != NULL ?
+                       ngx_buf_size(ctx->recv_out->buf) : -1));
         ngx_chain_update_chains(r->pool, &ctx->recv_free, &ctx->recv_busy, &ctx->recv_out,
                                 (ngx_buf_tag_t) &ngx_http_gunzip_filter_module);
+        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                       "[gunrecv] update_chains#2 post: busy=%d", ctx->recv_busy != 0);
         ctx->recv_last_out = &ctx->recv_out;
 
         ctx->recv_nomem = 0;
         flush = 0;
 
         if (ctx->recv_done) {
+            ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                    "[gunrecv] done: rc=%d", rc);
             return rc;
         }
     }
@@ -1210,11 +1287,15 @@ failed:
 static ngx_int_t
 ngx_http_gunzip_filter_init(ngx_conf_t *cf)
 {
+#if ENABLE_ORIG
     ngx_http_next_header_filter = ngx_http_top_header_filter;
     ngx_http_top_header_filter = ngx_http_gunzip_header_filter;
+#endif
 
+#if ENABLE_ORIG
     ngx_http_next_body_filter = ngx_http_top_body_filter;
     ngx_http_top_body_filter = ngx_http_gunzip_body_filter;
+#endif
 
     ngx_http_next_request_body_filter = ngx_http_top_request_body_filter;
     ngx_http_top_request_body_filter = ngx_http_gunzip_request_body_filter;
